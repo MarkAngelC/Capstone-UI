@@ -14,7 +14,21 @@ export async function summariesRoutes(app) {
       });
     }
 
-    const { tenantId, requestId, note, options } = parsed.data;
+    const { tenantId: tenantIdFromBody, requestId, note, options } = parsed.data;
+
+    const tenantId = req.tenant?.tenantId; // derived from API key
+    if (!tenantId) {
+      return reply.code(500).send({
+        error: { code: "SERVER_MISCONFIG", message: "Auth tenant not set" }
+      });
+    }
+
+    // Optional: allow tenantId in body for debugging, but enforce match if present
+    if (tenantIdFromBody && tenantIdFromBody !== tenantId) {
+      return reply.code(403).send({
+        error: { code: "FORBIDDEN", message: "tenantId does not match API key" }
+      });
+    }
 
     // Hard enforce low temperature server-side
     const temperature = Math.min(options?.temperature ?? 0.2, 0.2);

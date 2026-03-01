@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 export const SummariesRequestSchema = z.object({
-  tenantId: z.string().min(1),
+  tenantId: z.string().min(1).optional(),
   requestId: z.string().optional(),
   note: z.object({
     raw: z.string().min(1).max(20000) // padded allowance

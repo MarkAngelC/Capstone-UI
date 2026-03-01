@@ -13,3 +13,7 @@ npm-debug.log*
 # Node build outputs
 dist/
 coverage/
+
+# ENV very important!!!! I learned my lesson :) -AL
+.env
+.env.*
