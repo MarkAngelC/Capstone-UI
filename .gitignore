@@ -17,3 +17,5 @@ coverage/
 # ENV very important!!!! I learned my lesson :) -AL
 .env
 .env.*
+!.env.example  
+#exception for the example file
