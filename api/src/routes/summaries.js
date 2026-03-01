@@ -1,7 +1,15 @@
 
+import { getConfig } from "../config.js";
+import { makeLLMProvider } from "../providers/index.js";
+import { SOAP_JSON_SYSTEM_PROMPT, PLAIN_SYSTEM_PROMPT } from "../prompts/system.js";
 import { SummariesRequestSchema, SoapSummarySchema } from "../schemas/summaries.schema.js";
 
+const config = getConfig();
+const llm = makeLLMProvider(config);
+
 export async function summariesRoutes(app) {
+  const t0 = Date.now(); //timer
+
   app.post("/v1/summaries", async (req, reply) => {
     const parsed = SummariesRequestSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -36,35 +44,81 @@ export async function summariesRoutes(app) {
     // Hard enforce low temperature server-side
     const temperature = Math.min(options?.temperature ?? 0.2, 0.2);
 
-    // STUB: pretend we summarized it
-    const soap = {
-      subjective: "Stub subjective (replace with model output).",
-      objective: "Stub objective (replace with model output).",
-      assessment: "Stub assessment (replace with model output).",
-      plan: "Stub plan (replace with model output)."
-    };
+    const messages = [
+      { role: "system", content: SOAP_JSON_SYSTEM_PROMPT },
+      { role: "user", content: note.raw }
+    ];
 
-    // Validate our SOAP structure (helps when model output is wired in)
-    const soapValidated = SoapSummarySchema.parse(soap);
+    let soapJsonText = "";
+    let usage = null;
+
+    try {
+      const result = await llm.chatComplete({
+        messages,
+        temperature,
+        maxTokens: 800
+      });
+
+      soapJsonText = result.content;
+      usage = result.usage;
+    } catch (e) {
+      return reply.code(502).send({
+        error: { code: "LLM_UPSTREAM_ERROR", message: String(e?.message || e) }
+      });
+    }
+
+    let soapObj;
+    try {
+      soapObj = JSON.parse(soapJsonText);
+    } catch {
+      return reply.code(502).send({
+        error: {
+          code: "LLM_BAD_OUTPUT",
+          message: "Model did not return valid JSON",
+          raw: soapJsonText.slice(0, 500)
+        }
+      });
+    }
+
+    const soapValidated = SoapSummarySchema.parse(soapObj);
+
+    let plainText = null;
+    let usagePlain = null;
+
+    if (options?.plainLanguage !== false) {
+      const plainMessages = [
+        { role: "system", content: PLAIN_SYSTEM_PROMPT },
+        { role: "user", content: note.raw }
+      ];
+
+      try {
+        const resultPlain = await llm.chatComplete({
+          messages: plainMessages,
+          temperature,
+          maxTokens: 500
+        });
+
+        plainText = resultPlain.content;
+        usagePlain = resultPlain.usage;
+      } catch (e) {
+        return reply.code(502).send({
+          error: { code: "LLM_UPSTREAM_ERROR", message: `Plain summary failed: ${String(e?.message || e)}` }
+        });
+      }
+    }
+
 
     return {
       requestId,
       tenantId,
       outputs: {
         soapClinicalSummary: options?.soap === false ? null : soapValidated,
-        plainLanguageSummary:
-          options?.plainLanguage === false
-            ? null
-            : `Stub plain-language summary. Temp capped at ${temperature}.`
+        plainLanguageSummary: options?.plainLanguage === false ? null : plainText
       },
       metadata: {
-        model: "stub",
-        latencyMs: 1,
-        usage: {
-          inputTokens: null,
-          outputTokens: null,
-          totalTokens: null
-        }
+        model: "azure",
+        latencyMs: Date.now() - t0,
+        usage: { soap: usage, plain: usagePlain }
       }
     };
   });

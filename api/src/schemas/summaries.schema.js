@@ -21,5 +21,5 @@ export const SoapSummarySchema = z.object({
   subjective: z.string(),
   objective: z.string(),
   assessment: z.string(),
-  plan: z.string()
+  plan: z.array(z.string())
 });
