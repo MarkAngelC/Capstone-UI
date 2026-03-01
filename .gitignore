@@ -1,0 +1,15 @@
+# Local IDE / workspace files
+.vs/
+*.slnx.sqlite
+*.sqlite
+
+# Node / npm
+node_modules/
+npm-debug.log*
+.env
+.env.*
+.DS_Store
+
+# Node build outputs
+dist/
+coverage/
