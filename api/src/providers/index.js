@@ -11,13 +11,15 @@ export function makeLLMProvider(config) {
 
     return {
       name: "azure",
-      async chatComplete({ messages, temperature, maxTokens }) {
+      async chatComplete({ messages, temperature, maxTokens, timeoutMs, maxRetries }) {
         return azureChatComplete({
           client,
           deploymentName: config.llm.azureOpenAI.deploymentName,
           messages,
           temperature,
-          maxTokens
+          maxTokens,
+          timeoutMs,
+          maxRetries
         });
       }
     };

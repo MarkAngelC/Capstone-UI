@@ -22,10 +22,15 @@ export function getConfig() {
     }
   };
 
+  const llmRuntime = {
+    timeoutMs: Number(process.env.LLM_TIMEOUT_MS || 25000),
+    maxRetries: Number(process.env.LLM_MAX_RETRIES || 2)
+  };
+
   const generation = {
-  soapMaxTokens: Number(process.env.SOAP_MAX_TOKENS || 900),
-  plainMaxTokens: Number(process.env.PLAIN_MAX_TOKENS || 500)
-};
+    soapMaxTokens: Number(process.env.SOAP_MAX_TOKENS || 900),
+    plainMaxTokens: Number(process.env.PLAIN_MAX_TOKENS || 500)
+  };
 
   return {
     port,
@@ -33,6 +38,7 @@ export function getConfig() {
     tenantKeys,
     rateLimit: { max: rateLimitMax, timeWindow: rateLimitWindow },
     llm,
+    llmRuntime,
     generation
   };
 }
