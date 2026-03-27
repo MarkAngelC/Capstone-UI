@@ -7,6 +7,7 @@ function App() {
   const [note, setNote] = useState('')
 
   const [isLoading, setIsLoading] = useState(false)
+  const [isListening, setIsListening] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
 
@@ -63,6 +64,46 @@ function App() {
     )
   }
 
+  function handleVoiceInput() {
+    // Check browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      setError('Speech recognition not supported in your browser.')
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-US'
+
+    recognition.onstart = () => {
+      setIsListening(true)
+      setError('')
+    }
+
+    recognition.onresult = (event) => {
+      let transcript = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript
+      }
+      // Append transcribed text to existing note
+      setNote((prevNote) => prevNote + (prevNote ? ' ' : '') + transcript)
+      setIsListening(false)
+    }
+
+    recognition.onerror = (event) => {
+      setError(`Voice input error: ${event.error}`)
+      setIsListening(false)
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+    }
+
+    recognition.start()
+  }
+
   return (
     <main className="app-shell">
       <header>
@@ -86,9 +127,20 @@ function App() {
             />
           </label>
 
-          <button type="submit" disabled={isLoading}>
-            {isLoading ? 'Summarizing...' : 'Summarize'}
-          </button>
+          <div className="button-group">
+            <button type="submit" disabled={isLoading || isListening}>
+              {isLoading ? 'Summarizing...' : 'Summarize'}
+            </button>
+            <button
+              type="button"
+              onClick={handleVoiceInput}
+              disabled={isLoading || isListening}
+              className="voice-btn"
+              title="Click to record voice input"
+            >
+              {isListening ? '🎙️ Listening...' : '🎙️ Voice Input'}
+            </button>
+          </div>
         </form>
 
         {error && <p className="error">{error}</p>}
