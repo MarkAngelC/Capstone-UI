@@ -121,11 +121,6 @@ function App() {
 
     recognition.start()
   }
-      setIsListening(false)
-    }
-
-    recognition.start()
-  }
 
   return (
     <main className="app-shell">
