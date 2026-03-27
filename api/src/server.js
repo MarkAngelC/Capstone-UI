@@ -5,6 +5,7 @@ import { healthRoutes } from "./routes/health.js";
 import { summariesRoutes } from "./routes/summaries.js";
 import { authPlugin } from "./middleware/auth.js";
 import rateLimit from "@fastify/rate-limit";
+import cors from "@fastify/cors";
 import { randomUUID } from "node:crypto";
 
 async function buildServer(config) {
@@ -36,8 +37,19 @@ async function buildServer(config) {
     reply.header("x-request-id", req.id);
   });
 
+  // allow browser clients (React dev server) to call this API.
+  await app.register(cors, {
+    origin: true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-request-id", "x-correlation-id"]
+  });
+
   // then authenticate the request
-  await app.register(authPlugin, { tenantKeys: config.tenantKeys }); // register auth plugin with tenant keys from config so no need to get config from env again in the plugin
+  await app.register(authPlugin, {
+    tenantKeys: config.tenantKeys,
+    allowPublicSummaries: config.auth.allowPublicSummaries,
+    publicTenantId: config.auth.publicTenantId
+  }); // register auth plugin with tenant keys and auth mode from config
 
   // next is rate limit
   await app.register(rateLimit, {

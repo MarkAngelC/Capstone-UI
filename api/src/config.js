@@ -32,6 +32,11 @@ export function getConfig() {
     plainMaxTokens: Number(process.env.PLAIN_MAX_TOKENS || 500)
   };
 
+  const auth = {
+    allowPublicSummaries: process.env.ALLOW_PUBLIC_SUMMARIES === "true",
+    publicTenantId: process.env.PUBLIC_TENANT_ID || ""
+  };
+
   return {
     port,
     host,
@@ -39,6 +44,7 @@ export function getConfig() {
     rateLimit: { max: rateLimitMax, timeWindow: rateLimitWindow },
     llm,
     llmRuntime,
-    generation
+    generation,
+    auth
   };
 }

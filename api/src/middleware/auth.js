@@ -2,6 +2,8 @@ import fp from "fastify-plugin";
 
 export const authPlugin = fp(async function authPlugin(app, opts) {
   const tenantKeys = opts?.tenantKeys || {};
+  const allowPublicSummaries = Boolean(opts?.allowPublicSummaries);
+  const configuredPublicTenantId = String(opts?.publicTenantId || "").trim();
 
   // Build reverse lookup: apiKey -> tenantId
   const keyToTenant = new Map();
@@ -13,12 +15,33 @@ export const authPlugin = fp(async function authPlugin(app, opts) {
   //app.log.info({ tenants: Object.keys(tenantKeys), keysCount: keyToTenant.size }, "auth: plugin registered");
 
   app.addHook("preHandler", async (req, reply) => {
+    // allow CORS preflight requests without auth
+    if (req.method === "OPTIONS") return;
+
     // Allow unauthenticated health checks
     if (req.url === "/health" || req.url === "/ready") return;
 
     const auth = req.headers.authorization || "";
     const match = auth.match(/^Bearer\s+(.+)$/i);
     const apiKey = match ? match[1].trim() : "";
+
+    if (!apiKey && allowPublicSummaries) {
+      const fallbackTenantId =
+        configuredPublicTenantId || Object.keys(tenantKeys)[0] || "";
+
+      if (!fallbackTenantId) {
+        reply.code(500).send({
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Public summaries enabled but no tenant is configured"
+          }
+        });
+        return;
+      }
+
+      req.tenant = { tenantId: fallbackTenantId };
+      return;
+    }
 
     if (!apiKey) {
       reply.code(401).send({
