@@ -73,49 +73,56 @@ function App() {
     }
 
     const recognition = new SpeechRecognition()
-    recognition.continuous = false
+    recognition.continuous = true // Stay on longer to catch all speech
     recognition.interimResults = true
     recognition.lang = 'en-US'
     recognition.maxAlternatives = 1
 
-    // Increase timeout to give more time for speech
-    const timeout = setTimeout(() => {
-      recognition.abort()
-    }, 10000) // 10 seconds
+    let hasReceivedSpeech = false
 
     recognition.onstart = () => {
       setIsListening(true)
       setError('')
+      hasReceivedSpeech = false
+      console.log('[Voice] Recognition started')
     }
 
     recognition.onresult = (event) => {
       let transcript = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript + (event.results[i].isFinal ? ' ' : '')
+        transcript += event.results[i][0].transcript + ' '
       }
-      if (transcript.trim()) {
-        setNote((prevNote) => prevNote + (prevNote ? ' ' : '') + transcript.trim())
+      transcript = transcript.trim()
+      
+      if (transcript) {
+        hasReceivedSpeech = true
+        console.log('[Voice] Transcript:', transcript)
+        setNote((prevNote) => prevNote + (prevNote ? ' ' : '') + transcript)
       }
     }
 
     recognition.onerror = (event) => {
-      clearTimeout(timeout)
       let errorMsg = event.error
+      console.log('[Voice] Error:', errorMsg)
 
-      // User-friendly error messages
-      const errorMap = {
-        'no-speech': 'No speech detected. Make sure your microphone is working and you spoke clearly.',
-        'network': 'Network error. Check your internet connection.',
-        'not-allowed': 'Microphone access denied. Check browser permissions.',
-        'audio-capture': 'No microphone found. Check your device.',
+      // Only show error if we didn't receive any speech
+      if (!hasReceivedSpeech && errorMsg === 'no-speech') {
+        setError('No speech detected. Try speaking louder or closer to the microphone.')
+      } else {
+        const errorMap = {
+          'no-speech': 'No speech detected. Try again.',
+          'network': 'Network error. Check your internet connection.',
+          'not-allowed': 'Microphone access denied. Check browser permissions.',
+          'audio-capture': 'No microphone found. Check your device.',
+        }
+        setError(errorMap[errorMsg] || `Voice input error: ${errorMsg}`)
       }
-
-      setError(errorMap[errorMsg] || `Voice input error: ${errorMsg}`)
+      
       setIsListening(false)
     }
 
     recognition.onend = () => {
-      clearTimeout(timeout)
+      console.log('[Voice] Recognition ended')
       setIsListening(false)
     }
 
