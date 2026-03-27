@@ -135,7 +135,7 @@ function App() {
         <p className="eyebrow">Clinical Document Summarization</p>
         <h1>Simple Clinical Summarizer</h1>
         <p className="subtitle">
-          Paste a raw note, click summarize, and get the output.
+          Type, paste, or use voice input to add your text, then click 'Summarize'.
         </p>
       </header>
 
