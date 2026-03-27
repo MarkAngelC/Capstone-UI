@@ -74,8 +74,14 @@ function App() {
 
     const recognition = new SpeechRecognition()
     recognition.continuous = false
-    recognition.interimResults = false
+    recognition.interimResults = true
     recognition.lang = 'en-US'
+    recognition.maxAlternatives = 1
+
+    // Increase timeout to give more time for speech
+    const timeout = setTimeout(() => {
+      recognition.abort()
+    }, 10000) // 10 seconds
 
     recognition.onstart = () => {
       setIsListening(true)
@@ -85,19 +91,36 @@ function App() {
     recognition.onresult = (event) => {
       let transcript = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript
+        transcript += event.results[i][0].transcript + (event.results[i].isFinal ? ' ' : '')
       }
-      // Append transcribed text to existing note
-      setNote((prevNote) => prevNote + (prevNote ? ' ' : '') + transcript)
-      setIsListening(false)
+      if (transcript.trim()) {
+        setNote((prevNote) => prevNote + (prevNote ? ' ' : '') + transcript.trim())
+      }
     }
 
     recognition.onerror = (event) => {
-      setError(`Voice input error: ${event.error}`)
+      clearTimeout(timeout)
+      let errorMsg = event.error
+
+      // User-friendly error messages
+      const errorMap = {
+        'no-speech': 'No speech detected. Make sure your microphone is working and you spoke clearly.',
+        'network': 'Network error. Check your internet connection.',
+        'not-allowed': 'Microphone access denied. Check browser permissions.',
+        'audio-capture': 'No microphone found. Check your device.',
+      }
+
+      setError(errorMap[errorMsg] || `Voice input error: ${errorMsg}`)
       setIsListening(false)
     }
 
     recognition.onend = () => {
+      clearTimeout(timeout)
+      setIsListening(false)
+    }
+
+    recognition.start()
+  }
       setIsListening(false)
     }
 
