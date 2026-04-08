@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000
 
 function App() {
   const [note, setNote] = useState('')
+  const [format, setFormat] = useState('soap')
 
   const [isLoading, setIsLoading] = useState(false)
   const [isListening, setIsListening] = useState(false)
@@ -23,6 +24,7 @@ function App() {
 
     const payload = {
       note: { raw: note.trim() },
+      options: { format },
     }
 
     try {
@@ -50,7 +52,7 @@ function App() {
     }
   }
 
-  function renderSoapPlan(planItems) {
+  function renderPlan(planItems) {
     if (!Array.isArray(planItems) || planItems.length === 0) {
       return <p className="empty">No plan items returned.</p>
     }
@@ -61,6 +63,50 @@ function App() {
           <li key={`${item}-${index}`}>{item}</li>
         ))}
       </ul>
+    )
+  }
+
+  function renderClinicalSummary() {
+    const clinicalSummary = result?.outputs?.clinicalSummary
+    const selectedFormat = result?.outputs?.format || format
+
+    if (!clinicalSummary) {
+      return <p className="empty">Clinical output unavailable.</p>
+    }
+
+    if (selectedFormat === 'dap') {
+      return (
+        <>
+          <p>
+            <strong>Data:</strong> {clinicalSummary.data}
+          </p>
+          <p>
+            <strong>Assessment:</strong> {clinicalSummary.assessment}
+          </p>
+          <div>
+            <strong>Plan:</strong>
+            {renderPlan(clinicalSummary.plan)}
+          </div>
+        </>
+      )
+    }
+
+    return (
+      <>
+        <p>
+          <strong>Subjective:</strong> {clinicalSummary.subjective}
+        </p>
+        <p>
+          <strong>Objective:</strong> {clinicalSummary.objective}
+        </p>
+        <p>
+          <strong>Assessment:</strong> {clinicalSummary.assessment}
+        </p>
+        <div>
+          <strong>Plan:</strong>
+          {renderPlan(clinicalSummary.plan)}
+        </div>
+      </>
     )
   }
 
@@ -79,6 +125,7 @@ function App() {
     recognition.maxAlternatives = 1
 
     let hasReceivedSpeech = false
+    let lastFinalChunk = ''
 
     recognition.onstart = () => {
       setIsListening(true)
@@ -88,13 +135,24 @@ function App() {
     }
 
     recognition.onresult = (event) => {
-      let transcript = ''
+      const finalChunks = []
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript + ' '
+        const result = event.results[i]
+        if (!result.isFinal) continue
+
+        const chunk = result[0]?.transcript?.trim()
+        if (chunk) finalChunks.push(chunk)
       }
-      transcript = transcript.trim()
+
+      const transcript = finalChunks.join(' ').trim()
       
       if (transcript) {
+        const normalized = transcript.toLowerCase().replace(/\s+/g, ' ')
+        if (normalized === lastFinalChunk) {
+          return
+        }
+
+        lastFinalChunk = normalized
         hasReceivedSpeech = true
         console.log('[Voice] Transcript:', transcript)
         setNote((prevNote) => prevNote + (prevNote ? ' ' : '') + transcript)
@@ -152,6 +210,14 @@ function App() {
             />
           </label>
 
+          <label>
+            Clinical Format
+            <select value={format} onChange={(event) => setFormat(event.target.value)}>
+              <option value="soap">SOAP</option>
+              <option value="dap">DAP</option>
+            </select>
+          </label>
+
           <div className="button-group">
             <button type="submit" disabled={isLoading || isListening}>
               {isLoading ? 'Summarizing...' : 'Summarize'}
@@ -181,26 +247,8 @@ function App() {
 
           <div className="result-grid">
             <article>
-              <h3>SOAP Summary</h3>
-              {result.outputs?.soapClinicalSummary ? (
-                <>
-                  <p>
-                    <strong>Subjective:</strong> {result.outputs.soapClinicalSummary.subjective}
-                  </p>
-                  <p>
-                    <strong>Objective:</strong> {result.outputs.soapClinicalSummary.objective}
-                  </p>
-                  <p>
-                    <strong>Assessment:</strong> {result.outputs.soapClinicalSummary.assessment}
-                  </p>
-                  <div>
-                    <strong>Plan:</strong>
-                    {renderSoapPlan(result.outputs.soapClinicalSummary.plan)}
-                  </div>
-                </>
-              ) : (
-                <p className="empty">SOAP output disabled or unavailable.</p>
-              )}
+              <h3>{(result.outputs?.format || format).toUpperCase()} Clinical Summary</h3>
+              {renderClinicalSummary()}
             </article>
 
             <article>

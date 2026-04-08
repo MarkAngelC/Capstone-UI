@@ -10,7 +10,7 @@ export const SummariesRequestSchema = z.object({
   }),
   options: z
     .object({
-      soap: z.boolean().default(true),
+      format: z.enum(["soap", "dap"]).default("soap"),
       plainLanguage: z.boolean().default(true),
       temperature: z.number().min(0).max(1).optional()
     })
@@ -20,6 +20,12 @@ export const SummariesRequestSchema = z.object({
 export const SoapSummarySchema = z.object({
   subjective: z.string(),
   objective: z.string(),
+  assessment: z.string(),
+  plan: z.array(z.string())
+});
+
+export const DapSummarySchema = z.object({
+  data: z.string(),
   assessment: z.string(),
   plan: z.array(z.string())
 });

@@ -1,22 +1,49 @@
 
 import { getConfig } from "../config.js";
 import { makeLLMProvider } from "../providers/index.js";
-import { SOAP_JSON_SYSTEM_PROMPT, PLAIN_SYSTEM_PROMPT } from "../prompts/system.js";
-import { SummariesRequestSchema, SoapSummarySchema } from "../schemas/summaries.schema.js";
+import { SOAP_JSON_SYSTEM_PROMPT, DAP_JSON_SYSTEM_PROMPT, PLAIN_SYSTEM_PROMPT } from "../prompts/system.js";
+import { SummariesRequestSchema, SoapSummarySchema, DapSummarySchema } from "../schemas/summaries.schema.js";
 
-const config = getConfig();
-const llm = makeLLMProvider(config);
 
 export async function summariesRoutes(app) {
 
 
   app.post("/v1/summaries", async (req, reply) => {
+    const config = getConfig();
+
+    // available formats, can be extended in the future with additional structured formats
+    const SUMMARY_FORMATS = {
+      soap: {
+        prompt: SOAP_JSON_SYSTEM_PROMPT,
+        schema: SoapSummarySchema,
+        maxTokens: config.generation.soapMaxTokens
+      },
+      dap: {
+        prompt: DAP_JSON_SYSTEM_PROMPT,
+        schema: DapSummarySchema,
+        maxTokens: config.generation.dapMaxTokens ?? config.generation.soapMaxTokens
+      }
+    };
+
+    let llm;
+    try {
+      llm = makeLLMProvider(config);
+    } catch (e) {
+      return reply.code(503).send({
+        requestId: req.id,
+        error: {
+          code: "LLM_NOT_CONFIGURED",
+          message: String(e?.message || e)
+        }
+      });
+    }
+
     const t0 = Date.now(); //start timer for latency
     const requestId = req.id;
 
     const parsed = SummariesRequestSchema.safeParse(req.body);
     if (!parsed.success) {
-      
+
       //check if raw note it too long
       const tooLarge = parsed.error.issues.some(
         (i) => i.path?.join(".") === "note.raw" && i.code === "too_big"
@@ -41,7 +68,10 @@ export async function summariesRoutes(app) {
         }
       });
     }
+
     const { tenantId: tenantIdFromBody, note, options } = parsed.data;
+    const format = options?.format ?? "soap"; //soap, dap, or additional formats in the future
+    const selectedFormat = SUMMARY_FORMATS[format];
 
 
     const tenantId = req.tenant?.tenantId; // derived from API key
@@ -68,24 +98,24 @@ export async function summariesRoutes(app) {
 
     // build the prompt using the raw note and system prompt/instruction
     const messages = [
-      { role: "system", content: SOAP_JSON_SYSTEM_PROMPT },
+      { role: "system", content: selectedFormat.prompt },
       { role: "user", content: note.raw }
     ];
 
 
-    // call the LLM to get the SOAP summary in JSON format
-    let soapJsonText = "";
+    // call the LLM to get the clinical summary in JSON format
+    let clinicalJsonText = "";
     let usage = null;
     try {
       const result = await llm.chatComplete({
         messages,
         temperature,
-        maxTokens: config.generation.soapMaxTokens,
+        maxTokens: selectedFormat.maxTokens,
         timeoutMs: config.llmRuntime.timeoutMs,
         maxRetries: config.llmRuntime.maxRetries
       });
 
-      soapJsonText = result.content;
+      clinicalJsonText = result.content;
       usage = result.usage;
     } catch (e) {
       return reply.code(502).send({
@@ -95,24 +125,24 @@ export async function summariesRoutes(app) {
     }
 
     // attempt to parse the JSON output from the model
-    let soapObj;
+    let clinicalObj;
     try {
-      soapObj = JSON.parse(soapJsonText);
+      clinicalObj = JSON.parse(clinicalJsonText);
     } catch {
       return reply.code(502).send({
         requestId,
         error: {
           code: "LLM_BAD_OUTPUT",
           message: "Model did not return valid JSON",
-          raw: soapJsonText.slice(0, 500)
+          raw: clinicalJsonText.slice(0, 500)
         }
       });
     }
 
     // validate the JSON output against our expected schema
-    let soapValidated;
+    let clinicalValidated;
     try {
-      soapValidated = SoapSummarySchema.parse(soapObj);
+      clinicalValidated = selectedFormat.schema.parse(clinicalObj);
     } catch (e) {
       return reply.code(502).send({
         requestId,
@@ -157,13 +187,14 @@ export async function summariesRoutes(app) {
       requestId,
       tenantId,
       outputs: {
-        soapClinicalSummary: options?.soap === false ? null : soapValidated,
+        format,
+        clinicalSummary: clinicalValidated,
         plainLanguageSummary: options?.plainLanguage === false ? null : plainText
       },
       metadata: {
         model: "azure",
         latencyMs: Date.now() - t0,
-        usage: { soap: usage, plain: usagePlain }
+        usage: { clinical: usage, plain: usagePlain }
       }
     };
   });
