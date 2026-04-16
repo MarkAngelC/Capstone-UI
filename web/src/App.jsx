@@ -11,6 +11,7 @@ function App() {
   const [isListening, setIsListening] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [recognition, setRecognition] = useState(null)
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -111,6 +112,12 @@ function App() {
   }
 
   function handleVoiceInput() {
+    // If already listening, stop the recognition
+    if (isListening && recognition) {
+      recognition.stop()
+      return
+    }
+
     // Check browser support
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) {
@@ -118,23 +125,23 @@ function App() {
       return
     }
 
-    const recognition = new SpeechRecognition()
-    recognition.continuous = true // Stay on longer to catch all speech
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
-    recognition.maxAlternatives = 1
+    const newRecognition = new SpeechRecognition()
+    newRecognition.continuous = true // Stay on longer to catch all speech
+    newRecognition.interimResults = true
+    newRecognition.lang = 'en-US'
+    newRecognition.maxAlternatives = 1
 
     let hasReceivedSpeech = false
     let lastFinalChunk = ''
 
-    recognition.onstart = () => {
+    newRecognition.onstart = () => {
       setIsListening(true)
       setError('')
       hasReceivedSpeech = false
       console.log('[Voice] Recognition started')
     }
 
-    recognition.onresult = (event) => {
+    newRecognition.onresult = (event) => {
       const finalChunks = []
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
@@ -159,7 +166,7 @@ function App() {
       }
     }
 
-    recognition.onerror = (event) => {
+    newRecognition.onerror = (event) => {
       let errorMsg = event.error
       console.log('[Voice] Error:', errorMsg)
 
@@ -177,14 +184,17 @@ function App() {
       }
       
       setIsListening(false)
+      setRecognition(null)
     }
 
-    recognition.onend = () => {
+    newRecognition.onend = () => {
       console.log('[Voice] Recognition ended')
       setIsListening(false)
+      setRecognition(null)
     }
 
-    recognition.start()
+    setRecognition(newRecognition)
+    newRecognition.start()
   }
 
   return (
@@ -225,11 +235,11 @@ function App() {
             <button
               type="button"
               onClick={handleVoiceInput}
-              disabled={isLoading || isListening}
+              disabled={isLoading}
               className="voice-btn"
-              title="Click to record voice input"
+              title={isListening ? "Click to stop recording" : "Click to record voice input"}
             >
-              {isListening ? '🎙️ Listening...' : '🎙️ Voice Input'}
+              {isListening ? '⏹️ Stop Listening' : '🎙️ Voice Input'}
             </button>
           </div>
         </form>
